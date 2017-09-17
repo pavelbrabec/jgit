@@ -47,9 +47,12 @@ import static org.eclipse.jgit.lib.Constants.DOT_GIT;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.api.errors.JGitInternalException;
@@ -207,8 +210,41 @@ public class CleanCommand extends GitCommand<Set<String>> {
 					}
 
 			return filtered;
+		} else {
+			/*
+			 * Filter subdirectories - fix for issue 514434
+			 * https://bugs.eclipse.org/bugs/show_bug.cgi?id=514434
+			 */
+
+			Set<Path> filtered = inputPaths.stream().map(Paths::get)
+					.collect(Collectors.toSet());
+			Set<Path> subDirs = new TreeSet<>();
+
+			for (Path dir : filtered) {
+				for (Path subdir : filtered) {
+					if (isSubdirectory(dir, subdir)) {
+						subDirs.add(subdir);
+					}
+				}
+			}
+			filtered.removeAll(subDirs);
+
+			return filtered.stream().map(Path::toString)
+					.collect(Collectors.toSet());
 		}
-		return inputPaths;
+	}
+
+	private boolean isSubdirectory(Path dir, Path subdir) {
+		if (dir.equals(subdir)) {
+			return false;
+		}
+		while ((subdir = subdir.getParent()) != null) {
+			if (dir.equals(subdir)) {
+				return true;
+
+			}
+		}
+		return false;
 	}
 
 	private Set<String> filterFolders(Set<String> untracked,
